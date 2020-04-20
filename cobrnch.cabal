@@ -1,10 +1,10 @@
 cabal-version:       2.4
-name:                coprbrnch
+name:                cobrnch
 version:             0.0.0.0
 synopsis:            Copr branch build tool
 description:         Copr branch build tool
-homepage:            https://github.com/juhp/coprbrnch
-bug-reports:         https://github.com/juhp/coprbrnch/issues
+homepage:            https://github.com/juhp/cobrnch
+bug-reports:         https://github.com/juhp/cobrnch/issues
 license:             GPL-3.0-only
 license-file:        LICENSE
 author:              Jens Petersen
@@ -24,16 +24,30 @@ source-repository head
   type:                git
   location:            https://github.com/juhp/coprbrnch.git
 
-common common-options
-  build-depends:       base >= 4.9.1.0 && < 4.14
-  
+executable coprbrnch
+  hs-source-dirs:      . src
+  main-is:             Main.hs
+  other-modules:       Common
+                       Common.System
+  ghc-options:         -threaded
+                       -rtsopts
+                       -with-rtsopts=-N
+
+  build-depends:       base < 5
+                     , directory
+                     , fedora-dists
+                     , filepath
+                     , optparse-applicative
+                     , simple-cmd
+                     , simple-cmd-args >= 0.1.6
+
   ghc-options:         -Wall
-                       -Wcompat
+  if impl(ghc >= 8.0)
+    ghc-options:       -Wcompat
                        -Widentities
                        -Wincomplete-uni-patterns
                        -Wincomplete-record-updates
-  if impl(ghc >= 8.0)
-    ghc-options:       -Wredundant-constraints
+                       -Wredundant-constraints
   if impl(ghc >= 8.2)
     ghc-options:       -fhide-source-paths
   if impl(ghc >= 8.4)
@@ -44,17 +58,3 @@ common common-options
 
   default-language:    Haskell2010
   default-extensions:  OverloadedStrings
-
-library
-  import:              common-options
-  hs-source-dirs:      src
-  exposed-modules:     Coprbrnch
-
-executable coprbrnch
-  import:              common-options
-  hs-source-dirs:      app
-  main-is:             Main.hs
-  build-depends:       coprbrnch
-  ghc-options:         -threaded
-                       -rtsopts
-                       -with-rtsopts=-N

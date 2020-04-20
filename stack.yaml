@@ -1,1 +1,6 @@
-resolver: lts-15.5
+resolver: lts-14.27
+
+extra-deps:
+  - git: https://github.com/juhp/fedora-dists.git
+    commit: dd035a5c006498f9b9f1b3f34fea7fb08c2de831
+  - simple-cmd-args-0.1.6
