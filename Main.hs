@@ -200,9 +200,8 @@ coprBuild _ [] _ _ = error' "No chroots chosen"
 coprBuild dryrun buildroots project src = do
   let chrootargs = mconcat [["-r", bldrt] |  bldrt <- buildroots]
       buildargs = ["build", "--nowait"] ++ chrootargs ++ [project,src]
-  if dryrun then
-    cmdN "copr" buildargs
-    else do
+  cmdN "copr" buildargs
+  unless dryrun $ do
     output <- cmd "copr" $ buildargs
     putStrLn output
     let bid = last $ words $ last $ lines output
