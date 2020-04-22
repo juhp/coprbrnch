@@ -41,6 +41,9 @@ main = do
   gitdir <- isGitDir "."
   dispatchCmd gitdir activeBranches
 
+data BuildBy = SingleBuild | ValidateByRelease | ValidateByArch
+  deriving Eq
+
 dispatchCmd :: Bool -> [Branch] -> IO ()
 dispatchCmd _ activeBranches =
   -- FIXME package version
@@ -53,7 +56,7 @@ dispatchCmd _ activeBranches =
 --    , Subcommand "switch" "Switch branch" $
 --      switchCmd <$> (anyBranchOpt <|> anyBranchArg) <*> many (pkgArg "PACKAGE...")
       Subcommand "buildsrc" "Build from spec/srpm" $
-      buildSrcCmd <$> dryrun <*> singlebuild <*> many branchOpt <*> archOpts <*> strArg "PROJECT" <*> strArg "SRPM/SPEC"
+      buildSrcCmd <$> dryrun <*> buildByOpt <*> many branchOpt <*> archOpts <*> strArg "PROJECT" <*> strArg "SRPM/SPEC"
 --    , Subcommand "status" "Status package/branch status" $
 --      statusCmd <$> switchWith 'r' "reviews" "Status of reviewed packages" <*> branchesPackages
 --    , Subcommand "merge" "Merge from newer branch" $
@@ -65,7 +68,8 @@ dispatchCmd _ activeBranches =
     ]
   where
     dryrun = switchWith 'n' "dry-run" "Do not actually do anything"
-    singlebuild = switchWith 's' "single" "Non-progressive normal single build"
+
+    buildByOpt = flagWith' SingleBuild 'S' "single" "Non-progressive normal single build" <|> flagWith ValidateByRelease ValidateByArch 'A' "by-arch" "Build across latest release archs first (default is across releases for primary arch)"
 
     branchOpt :: Parser Branch
     branchOpt = optionWith branchM 'b' "branch" "BRANCH" "branch"
@@ -108,8 +112,8 @@ dispatchCmd _ activeBranches =
 
 -- FIXME make project optional ?
 -- FIXME repo config with a setup command?
-buildSrcCmd :: Bool -> Bool -> [Branch] -> [String] -> String -> FilePath -> IO ()
-buildSrcCmd dryrun singlebuild brs archs project src = do
+buildSrcCmd :: Bool -> BuildBy -> [Branch] -> [String] -> String -> FilePath -> IO ()
+buildSrcCmd dryrun buildBy brs archs project src = do
   -- pkg <- takeFileName <$> getCurrentDirectory
   username <- getUsername
   chroots <- coprChroots username project
@@ -122,14 +126,21 @@ buildSrcCmd dryrun singlebuild brs archs project src = do
         else [chroot | arch <- archs, br <- branches, let chroot = branchRelease br ++ "-" ++ arch, chroot `elem` chroots]
   if null buildroots then error' "No chroots chosen"
     else do
-    if singlebuild then
+    if buildBy == SingleBuild then
       coprBuild dryrun buildroots project src
       else do
-      let primaryArch = releaseArch $ head buildroots
-          primaryChroots = filter (isArch primaryArch) buildroots
-      forM_ primaryChroots $ \ chroot ->
+      let validateChroots =
+            case buildBy of
+              ValidateByRelease ->
+                let primaryArch = releaseArch $ head buildroots in
+                  filter (isArch primaryArch) buildroots
+              ValidateByArch ->
+                let newestRelease = removeArch $ head buildroots in
+                  filter (newestRelease `isPrefixOf`) buildroots
+              SingleBuild -> error' "Single build was incorrectly handled!"
+      forM_ validateChroots $ \ chroot ->
         coprBuild dryrun [chroot] project src
-      let remainingChroots = buildroots \\ primaryChroots
+      let remainingChroots = buildroots \\ validateChroots
       unless (null remainingChroots) $
         coprBuild dryrun remainingChroots project src
   where
