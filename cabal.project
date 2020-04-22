@@ -3,4 +3,9 @@ packages: .
 source-repository-package
     type: git
     location: https://github.com/juhp/fedora-dists.git
-    tag: dd035a5c006498f9b9f1b3f34fea7fb08c2de831
+    tag: f4a30b73acfb5ebed7c925dd2a454e75601d4ce2
+
+source-repository-package
+    type: git
+    location: https://github.com/juhp/copr-hs.git
+    tag: e3fda570eedefb387f093833ba19e2feb026661a

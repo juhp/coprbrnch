@@ -1,6 +1,6 @@
 cabal-version:       2.4
 name:                cobrnch
-version:             0.0.0.0
+version:             0.1
 synopsis:            Copr branch build tool
 description:         Copr branch build tool
 homepage:            https://github.com/juhp/cobrnch
@@ -24,22 +24,30 @@ source-repository head
   type:                git
   location:            https://github.com/juhp/coprbrnch.git
 
-executable coprbrnch
+executable cobrnch
   hs-source-dirs:      . src
   main-is:             Main.hs
   other-modules:       Common
                        Common.System
+                       Common.Text
   ghc-options:         -threaded
                        -rtsopts
                        -with-rtsopts=-N
 
   build-depends:       base < 5
+                     , config-ini
+                     , copr
                      , directory
                      , fedora-dists
                      , filepath
+                     , microlens
+                     , microlens-aeson
                      , optparse-applicative
                      , simple-cmd
                      , simple-cmd-args >= 0.1.6
+                     , text
+                     , unordered-containers
+                     , xdg-basedir
 
   ghc-options:         -Wall
   if impl(ghc >= 8.0)

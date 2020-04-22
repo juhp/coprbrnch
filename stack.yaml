@@ -2,5 +2,7 @@ resolver: lts-14.27
 
 extra-deps:
   - git: https://github.com/juhp/fedora-dists.git
-    commit: dd035a5c006498f9b9f1b3f34fea7fb08c2de831
+    commit: f4a30b73acfb5ebed7c925dd2a454e75601d4ce2
   - simple-cmd-args-0.1.6
+  - git: https://github.com/juhp/copr-hs.git
+    commit: e3fda570eedefb387f093833ba19e2feb026661a

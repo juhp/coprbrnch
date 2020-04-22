@@ -1,13 +1,33 @@
+{-# LANGUAGE CPP #-}
+
 module Main (main) where
 
 import Common
 import Common.System
+import qualified Common.Text as T
 
+#if (defined(VERSION_lens_aeson))
+import Control.Lens
+import Data.Aeson.Lens
+#else
+import Lens.Micro
+import Lens.Micro.Aeson
+#endif
+#if (defined(VERSION_aeson_pretty))
+import Data.Aeson.Encode.Pretty
+import qualified Data.ByteString.Lazy.Char8 as BL
+import Network.HTTP.Conduit (queryString)
+#endif
+
+import Data.Ini.Config
+import qualified Data.HashMap.Lazy as H
 import Distribution.Fedora.Branch
 import Options.Applicative (eitherReader, ReadM)
 import SimpleCmd.Git
 import SimpleCmdArgs
+import System.Environment.XDG.BaseDir (getUserConfigDir)
 import System.IO (BufferMode(NoBuffering), hSetBuffering, hIsTerminalDevice, stdin, stdout)
+import Web.Fedora.Copr (coprGetProject)
 
 --import Package (Package)
 
@@ -33,7 +53,7 @@ dispatchCmd _ activeBranches =
 --    , Subcommand "switch" "Switch branch" $
 --      switchCmd <$> (anyBranchOpt <|> anyBranchArg) <*> many (pkgArg "PACKAGE...")
       Subcommand "buildsrc" "Build from spec/srpm" $
-      buildSrcCmd <$> many branchOpt <*> many (strOptionWith 'a' "arch" "ARCH" "archs to build for") <*> strArg "SRPM/SPEC"
+      buildSrcCmd <$> dryrun <*> singlebuild <*> many branchOpt <*> archOpts <*> strArg "PROJECT" <*> strArg "SRPM/SPEC"
 --    , Subcommand "status" "Status package/branch status" $
 --      statusCmd <$> switchWith 'r' "reviews" "Status of reviewed packages" <*> branchesPackages
 --    , Subcommand "merge" "Merge from newer branch" $
@@ -44,6 +64,9 @@ dispatchCmd _ activeBranches =
 --      pullPkgs <$> some (pkgArg "PACKAGE...")
     ]
   where
+    dryrun = switchWith 'n' "dry-run" "Do not actually do anything"
+    singlebuild = switchWith 's' "single" "Non-progressive normal single build"
+
     branchOpt :: Parser Branch
     branchOpt = optionWith branchM 'b' "branch" "BRANCH" "branch"
 
@@ -52,6 +75,9 @@ dispatchCmd _ activeBranches =
 
     branchM :: ReadM Branch
     branchM = eitherReader (eitherActiveBranch activeBranches)
+
+    archOpts :: Parser [String]
+    archOpts = many (strOptionWith 'a' "arch" "ARCH" "archs to build for")
 
     -- anyBranchOpt :: Parser Branch
     -- anyBranchOpt = optionWith anyBranchM 'b' "branch" "BRANCH" "branch"
@@ -78,21 +104,108 @@ dispatchCmd _ activeBranches =
 
     -- mergeOpt = switchWith 'm' "merge" "merge from newer branch"
 
--- FIXME --repo
--- default to repo = package = dir
--- FIXME repo config: maybe setup command
-buildSrcCmd :: [Branch] -> [String] -> FilePath -> IO ()
-buildSrcCmd branches archs src = do
-  pkg <- takeFileName <$> getCurrentDirectory
-  let buildroots = [branchRelease br ++ "-" ++ arch | arch <- archs, br <- branches]
-      args = ["build", "--nowait"] ++ mconcat [["-r", bldrt] |  bldrt <- buildroots] ++ [pkg, src]
-  cmdN "copr" args
-  output <- cmd "copr" args
-  putStrLn output
-  let bid = last $ words $ last $ lines output
-  cmd_ "copr" ["watch-build", bid]
+
+
+-- FIXME make project optional ?
+-- FIXME repo config with a setup command?
+buildSrcCmd :: Bool -> Bool -> [Branch] -> [String] -> String -> FilePath -> IO ()
+buildSrcCmd dryrun singlebuild brs archs project src = do
+  -- pkg <- takeFileName <$> getCurrentDirectory
+  username <- getUsername
+  chroots <- coprChroots username project
+  let branches = if null brs then
+        (map (releaseBranch . T.pack) . nub . map removeArch) chroots
+        else brs
+      buildroots = reverseSort $
+        if null archs
+        then [chroot | chroot <- chroots, removeArch chroot `elem` map branchRelease branches]
+        else [chroot | arch <- archs, br <- branches, let chroot = branchRelease br ++ "-" ++ arch, chroot `elem` chroots]
+  if null buildroots then error' "No chroots chosen"
+    else do
+    if singlebuild then
+      coprBuild dryrun buildroots project src
+      else do
+      let primaryArch = releaseArch $ head buildroots
+          primaryChroots = filter (isArch primaryArch) buildroots
+      forM_ primaryChroots $ \ chroot ->
+        coprBuild dryrun [chroot] project src
+      let remainingChroots = buildroots \\ primaryChroots
+      unless (null remainingChroots) $
+        coprBuild dryrun remainingChroots project src
+  where
+    removeArch relarch = init $ dropWhileEnd (/= '-') relarch
+
+    releaseArch relarch = takeWhileEnd (/= '-') relarch
+
+    isArch arch release = releaseArch release == arch
+
+    reverseSort = reverse . sort
+
+    -- from extra
+    takeWhileEnd :: (a -> Bool) -> [a] -> [a]
+    takeWhileEnd f = reverse . takeWhile f . reverse
 
 branchRelease :: Branch -> String
 branchRelease Master = "fedora-rawhide"
 branchRelease (Fedora n) = "fedora-" ++ show n
 branchRelease (EPEL n) = "epel-" ++ show n
+
+--data Chroot = Chroot Release Arch
+
+-- FIXME Chroot type
+coprChroots :: String -> String -> IO [String]
+coprChroots owner project = do
+  proj <- coprGetProject coprServer owner project
+  case proj ^? key "chroot_repos" . _Object of
+    Nothing -> error' "chroot_repos not found"
+    Just obj -> return $ (map T.unpack . reverse . sort . H.keys) obj
+
+coprServer :: String
+coprServer = "copr.fedorainfracloud.org"
+
+getUsername :: IO String
+getUsername = do
+  rc <- getUserConfigDir "copr"
+  readIniConfig rc rcParser id
+  where
+    rcParser :: IniParser String
+    rcParser =
+      section "copr-cli" $
+      fieldOf "username" string
+
+-- changed from fbrnch/Bugzilla.hs
+readIniConfig :: FilePath -> IniParser a -> (a -> b) -> IO b
+readIniConfig inifile iniparser record = do
+  havefile <- doesFileExist inifile
+  if not havefile then
+    error' $ inifile ++ " not found: maybe GET /api from copr"
+    else do
+    ini <- T.readFile inifile
+    let config = parseIniFile ini iniparser
+    return $ either error' record config
+
+coprBuild :: Bool -> [String] -> String -> String -> IO ()
+coprBuild _ [] _ _ = error' "No chroots chosen"
+coprBuild dryrun buildroots project src = do
+  let chrootargs = mconcat [["-r", bldrt] |  bldrt <- buildroots]
+      buildargs = ["build", "--nowait"] ++ chrootargs ++ [project,src]
+  if dryrun then
+    cmdN "copr" buildargs
+    else do
+    output <- cmd "copr" $ buildargs
+    putStrLn output
+    let bid = last $ words $ last $ lines output
+    cmd_ "copr" ["watch-build", bid]
+
+-- coprBuilds :: Bool -> [String] -> String -> String -> IO ()
+-- coprBuilds _ [] _ _ = return ()
+-- coprBuilds dryrun (chroot:chroots) project src = do
+--   let chrootargs = mconcat [["-r", bldrt] |  bldrt <- buildroots]
+--       buildargs = ["build", "--nowait"] ++ chrootargs ++ [project,src]
+--   if dryrun then
+--     cmdN "copr" buildargs
+--     else do
+--     output <- cmd "copr" $ buildargs
+--     putStrLn output
+--     let bid = last $ words $ last $ lines output
+--     cmd_ "copr" ["watch-build", bid]
