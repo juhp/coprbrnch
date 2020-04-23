@@ -41,7 +41,7 @@ main = do
   gitdir <- isGitDir "."
   dispatchCmd gitdir activeBranches
 
-data BuildBy = SingleBuild | ValidateByRelease | ValidateByArch
+data BuildBy = SingleBuild | ValidateByRelease | ValidateByArch | BuildByRelease
   deriving (Eq)
 
 dispatchCmd :: Bool -> [Branch] -> IO ()
@@ -67,9 +67,9 @@ dispatchCmd _ activeBranches =
 --      pullPkgs <$> some (pkgArg "PACKAGE...")
     ]
   where
-    dryrun = switchWith 'n' "dry-run" "Do not actually do anything"
+    dryrun = switchWith 'n' "dry-run" "Just print commands that would be executed"
 
-    buildByOpt = flagWith' SingleBuild 'S' "single" "Non-progressive normal single build" <|> flagWith ValidateByRelease ValidateByArch 'A' "by-arch" "Build across latest release archs first (default is across releases for primary arch)"
+    buildByOpt = flagWith' SingleBuild 'S' "single" "Non-progressive normal single build" <|> flagWith' BuildByRelease 'R' "by-release" "Builds by release" <|> flagWith ValidateByRelease ValidateByArch 'A' "by-arch" "Build across latest release archs first (default is across releases for primary arch)"
 
     branchOpt :: Parser Branch
     branchOpt = optionWith branchM 'b' "branch" "BRANCH" "branch"
@@ -134,13 +134,15 @@ buildSrcCmd dryrun buildBy brs archs project src = do
                 SingleBuild -> []
                 ValidateByRelease ->
                   let primaryArch = releaseArch $ head buildroots
-                   in filter (isArch primaryArch) buildroots
+                   in map singleton $ filter (isArch primaryArch) buildroots
                 ValidateByArch ->
                   let newestRelease = removeArch $ head buildroots
-                   in filter (newestRelease `isPrefixOf`) buildroots
-    forM_ initialChroots $ \chroot ->
-      coprBuild dryrun [chroot] project src
-    let remainingChroots = buildroots \\ initialChroots
+                   in map singleton $ filter (newestRelease `isPrefixOf`) buildroots
+                BuildByRelease ->
+                  groupBy sameRelease buildroots
+    forM_ initialChroots $ \chrs ->
+      coprBuild dryrun chrs project src
+    let remainingChroots = buildroots \\ concat initialChroots
     unless (null remainingChroots) $
       coprBuild dryrun remainingChroots project src
   where
@@ -150,11 +152,16 @@ buildSrcCmd dryrun buildBy brs archs project src = do
 
     isArch arch release = releaseArch release == arch
 
+    sameRelease r1 r2 = removeArch r1 == removeArch r2
+
     reverseSort = reverse . sort
 
     -- from extra
     takeWhileEnd :: (a -> Bool) -> [a] -> [a]
     takeWhileEnd f = reverse . takeWhile f . reverse
+
+    singleton :: a -> [a]
+    singleton x = [x]
 
 branchRelease :: Branch -> String
 branchRelease Master = "fedora-rawhide"
