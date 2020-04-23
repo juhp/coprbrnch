@@ -19,14 +19,14 @@ import qualified Data.ByteString.Lazy.Char8 as BL
 import Network.HTTP.Conduit (queryString)
 #endif
 
-import Data.Ini.Config
 import qualified Data.HashMap.Lazy as H
+import Data.Ini.Config
 import Distribution.Fedora.Branch
-import Options.Applicative (eitherReader, ReadM)
+import Options.Applicative (ReadM, eitherReader)
 import SimpleCmd.Git
 import SimpleCmdArgs
 import System.Environment.XDG.BaseDir (getUserConfigDir)
-import System.IO (BufferMode(NoBuffering), hSetBuffering, hIsTerminalDevice, stdin, stdout)
+import System.IO (BufferMode (NoBuffering), hIsTerminalDevice, hSetBuffering, stdin, stdout)
 import Web.Fedora.Copr (coprGetProject)
 
 --import Package (Package)
@@ -42,7 +42,7 @@ main = do
   dispatchCmd gitdir activeBranches
 
 data BuildBy = SingleBuild | ValidateByRelease | ValidateByArch
-  deriving Eq
+  deriving (Eq)
 
 dispatchCmd :: Bool -> [Branch] -> IO ()
 dispatchCmd _ activeBranches =
@@ -117,14 +117,17 @@ buildSrcCmd dryrun buildBy brs archs project src = do
   -- pkg <- takeFileName <$> getCurrentDirectory
   username <- getUsername
   chroots <- coprChroots username project
-  let branches = if null brs then
-        (map (releaseBranch . T.pack) . nub . map removeArch) chroots
+  let branches =
+        if null brs
+        then (map (releaseBranch . T.pack) . nub . map removeArch) chroots
         else brs
-      buildroots = reverseSort $
-        if null archs
-        then [chroot | chroot <- chroots, removeArch chroot `elem` map branchRelease branches]
-        else [chroot | arch <- archs, br <- branches, let chroot = branchRelease br ++ "-" ++ arch, chroot `elem` chroots]
-  if null buildroots then error' "No chroots chosen"
+      buildroots =
+        reverseSort $
+          if null archs
+          then [chroot | chroot <- chroots, removeArch chroot `elem` map branchRelease branches]
+          else [chroot | arch <- archs, br <- branches, let chroot = branchRelease br ++ "-" ++ arch, chroot `elem` chroots]
+  if null buildroots
+    then error' "No chroots chosen"
     else do
     if buildBy == SingleBuild then
       coprBuild dryrun buildroots project src
@@ -188,8 +191,8 @@ getUsername = do
 readIniConfig :: FilePath -> IniParser a -> (a -> b) -> IO b
 readIniConfig inifile iniparser record = do
   havefile <- doesFileExist inifile
-  if not havefile then
-    error' $ inifile ++ " not found: maybe GET /api from copr"
+  if not havefile
+    then error' $ inifile ++ " not found: maybe GET /api from copr"
     else do
     ini <- T.readFile inifile
     let config = parseIniFile ini iniparser
@@ -198,8 +201,8 @@ readIniConfig inifile iniparser record = do
 coprBuild :: Bool -> [String] -> String -> String -> IO ()
 coprBuild _ [] _ _ = error' "No chroots chosen"
 coprBuild dryrun buildroots project src = do
-  let chrootargs = mconcat [["-r", bldrt] |  bldrt <- buildroots]
-      buildargs = ["build", "--nowait"] ++ chrootargs ++ [project,src]
+  let chrootargs = mconcat [["-r", bldrt] | bldrt <- buildroots]
+      buildargs = ["build", "--nowait"] ++ chrootargs ++ [project, src]
   cmdN "copr" buildargs
   unless dryrun $ do
     output <- cmd "copr" $ buildargs
