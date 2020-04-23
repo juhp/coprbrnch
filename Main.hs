@@ -219,3 +219,13 @@ coprBuild dryrun buildroots project src = do
 --     putStrLn output
 --     let bid = last $ words $ last $ lines output
 --     cmd_ "copr" ["watch-build", bid]
+
+#if (defined(MIN_VERSION_simple_cmd) && MIN_VERSION_simple_cmd(0,1,4))
+#else
+error' :: String -> a
+#if (defined(MIN_VERSION_base) && MIN_VERSION_base(4,9,0))
+error' = errorWithoutStackTrace
+#else
+error' = error
+#endif
+#endif
