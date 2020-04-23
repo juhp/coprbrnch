@@ -129,23 +129,20 @@ buildSrcCmd dryrun buildBy brs archs project src = do
   if null buildroots
     then error' "No chroots chosen"
     else do
-    if buildBy == SingleBuild then
-      coprBuild dryrun buildroots project src
-      else do
-      let validateChroots =
-            case buildBy of
-              ValidateByRelease ->
-                let primaryArch = releaseArch $ head buildroots in
-                  filter (isArch primaryArch) buildroots
-              ValidateByArch ->
-                let newestRelease = removeArch $ head buildroots in
-                  filter (newestRelease `isPrefixOf`) buildroots
-              SingleBuild -> error' "Single build was incorrectly handled!"
-      forM_ validateChroots $ \ chroot ->
-        coprBuild dryrun [chroot] project src
-      let remainingChroots = buildroots \\ validateChroots
-      unless (null remainingChroots) $
-        coprBuild dryrun remainingChroots project src
+    let initialChroots =
+              case buildBy of
+                SingleBuild -> []
+                ValidateByRelease ->
+                  let primaryArch = releaseArch $ head buildroots
+                   in filter (isArch primaryArch) buildroots
+                ValidateByArch ->
+                  let newestRelease = removeArch $ head buildroots
+                   in filter (newestRelease `isPrefixOf`) buildroots
+    forM_ initialChroots $ \chroot ->
+      coprBuild dryrun [chroot] project src
+    let remainingChroots = buildroots \\ initialChroots
+    unless (null remainingChroots) $
+      coprBuild dryrun remainingChroots project src
   where
     removeArch relarch = init $ dropWhileEnd (/= '-') relarch
 
