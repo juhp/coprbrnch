@@ -129,22 +129,34 @@ buildSrcCmd dryrun buildBy brs archs project src = do
   if null buildroots
     then error' "No chroots chosen"
     else do
-    let initialChroots =
-              case buildBy of
-                SingleBuild -> []
-                ValidateByRelease ->
-                  let primaryArch = releaseArch $ head buildroots
-                   in map singleton $ filter (isArch primaryArch) buildroots
-                ValidateByArch ->
-                  let newestRelease = removeArch $ head buildroots
-                   in map singleton $ filter (newestRelease `isPrefixOf`) buildroots
-                BuildByRelease ->
-                  groupBy sameRelease buildroots
-    forM_ initialChroots $ \chrs ->
-      coprBuild dryrun chrs project src
-    let remainingChroots = buildroots \\ concat initialChroots
-    unless (null remainingChroots) $
-      coprBuild dryrun remainingChroots project src
+    case buildBy of
+                SingleBuild -> coprBuild dryrun buildroots project src
+                -- FIXME or default to secondary parallel to previous primary
+                ValidateByRelease -> do
+                  let initialChroots =
+                        let primaryArch = releaseArch $ head buildroots
+                        in map singleton $ filter (isArch primaryArch) buildroots
+                  forM_ initialChroots $ \chrs ->
+                    coprBuild dryrun chrs project src
+                  let remainingChroots = buildroots \\ concat initialChroots
+                  unless (null remainingChroots) $
+                    coprBuild dryrun remainingChroots project src
+                ValidateByArch -> do
+                  let initialChroots =
+                        let newestRelease = removeArch $ head buildroots
+                        in map singleton $ filter (newestRelease `isPrefixOf`) buildroots
+                  forM_ initialChroots $ \chrs ->
+                    coprBuild dryrun chrs project src
+                  let remainingChroots = buildroots \\ concat initialChroots
+                  unless (null remainingChroots) $
+                    coprBuild dryrun remainingChroots project src
+                BuildByRelease -> do
+                  let initialChroots = groupBy sameRelease buildroots
+                  forM_ initialChroots $ \chrs ->
+                    coprBuild dryrun chrs project src
+                  let remainingChroots = buildroots \\ concat initialChroots
+                  unless (null remainingChroots) $
+                    coprBuild dryrun remainingChroots project src
   where
     removeArch relarch = init $ dropWhileEnd (/= '-') relarch
 
