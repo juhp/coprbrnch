@@ -5,7 +5,7 @@ synopsis:            Copr branch build tool
 description:         Copr branch build tool
 homepage:            https://github.com/juhp/cobrnch
 bug-reports:         https://github.com/juhp/cobrnch/issues
-license:             GPL-3.0-only
+license:             GPL-3.0
 license-file:        LICENSE
 author:              Jens Petersen
 maintainer:          Jens Petersen <petersen@redhat.com>
