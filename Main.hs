@@ -129,34 +129,37 @@ buildSrcCmd dryrun buildBy brs archs project src = do
   if null buildroots
     then error' "No chroots chosen"
     else do
+    srpm <- if "spec" `isExtensionOf` src
+            then generateSrpm src
+            else return src
     case buildBy of
-                SingleBuild -> coprBuild dryrun buildroots project src
+                SingleBuild -> coprBuild dryrun buildroots project srpm
                 -- FIXME or default to secondary parallel to previous primary
                 ValidateByRelease -> do
                   let initialChroots =
                         let primaryArch = releaseArch $ head buildroots
                         in map singleton $ filter (isArch primaryArch) buildroots
                   forM_ initialChroots $ \chrs ->
-                    coprBuild dryrun chrs project src
+                    coprBuild dryrun chrs project srpm
                   let remainingChroots = buildroots \\ concat initialChroots
                   unless (null remainingChroots) $
-                    coprBuild dryrun remainingChroots project src
+                    coprBuild dryrun remainingChroots project srpm
                 ValidateByArch -> do
                   let initialChroots =
                         let newestRelease = removeArch $ head buildroots
                         in map singleton $ filter (newestRelease `isPrefixOf`) buildroots
                   forM_ initialChroots $ \chrs ->
-                    coprBuild dryrun chrs project src
+                    coprBuild dryrun chrs project srpm
                   let remainingChroots = buildroots \\ concat initialChroots
                   unless (null remainingChroots) $
-                    coprBuild dryrun remainingChroots project src
+                    coprBuild dryrun remainingChroots project srpm
                 BuildByRelease -> do
                   let initialChroots = groupBy sameRelease buildroots
                   forM_ initialChroots $ \chrs ->
-                    coprBuild dryrun chrs project src
+                    coprBuild dryrun chrs project srpm
                   let remainingChroots = buildroots \\ concat initialChroots
                   unless (null remainingChroots) $
-                    coprBuild dryrun remainingChroots project src
+                    coprBuild dryrun remainingChroots project srpm
   where
     removeArch relarch = init $ dropWhileEnd (/= '-') relarch
 
@@ -214,11 +217,11 @@ readIniConfig inifile iniparser record = do
     let config = parseIniFile ini iniparser
     return $ either error' record config
 
-coprBuild :: Bool -> [String] -> String -> String -> IO ()
+coprBuild :: Bool -> [String] -> String -> FilePath -> IO ()
 coprBuild _ [] _ _ = error' "No chroots chosen"
-coprBuild dryrun buildroots project src = do
+coprBuild dryrun buildroots project srpm = do
   let chrootargs = mconcat [["-r", bldrt] | bldrt <- buildroots]
-      buildargs = ["build", "--nowait"] ++ chrootargs ++ [project, src]
+      buildargs = ["build", "--nowait"] ++ chrootargs ++ [project, srpm]
   cmdN "copr" buildargs
   unless dryrun $ do
     output <- cmd "copr" $ buildargs
@@ -228,9 +231,9 @@ coprBuild dryrun buildroots project src = do
 
 -- coprBuilds :: Bool -> [String] -> String -> String -> IO ()
 -- coprBuilds _ [] _ _ = return ()
--- coprBuilds dryrun (chroot:chroots) project src = do
+-- coprBuilds dryrun (chroot:chroots) project srpm = do
 --   let chrootargs = mconcat [["-r", bldrt] |  bldrt <- buildroots]
---       buildargs = ["build", "--nowait"] ++ chrootargs ++ [project,src]
+--       buildargs = ["build", "--nowait"] ++ chrootargs ++ [project,srpm]
 --   if dryrun then
 --     cmdN "copr" buildargs
 --     else do
@@ -238,6 +241,30 @@ coprBuild dryrun buildroots project src = do
 --     putStrLn output
 --     let bid = last $ words $ last $ lines output
 --     cmd_ "copr" ["watch-build", bid]
+
+-- adapted from fbrnch Package
+generateSrpm :: FilePath -> IO FilePath
+generateSrpm spec = do
+  let distopt = ["--undefine", "dist"]
+  srpmfile <- cmd "rpmspec" $ ["-q", "--srpm"] ++ distopt ++ ["--qf", "%{name}-%{version}-%{release}.src.rpm", spec]
+  let srpm = srpmfile
+      srpmdiropt = ["--define", "_srcrpmdir ."]
+  ifM (notM $ doesFileExist srpm)
+    (buildSrpm (distopt ++ srpmdiropt)) $
+    do
+    specTime <- getModificationTime spec
+    srpmTime <- getModificationTime srpm
+    if srpmTime > specTime
+      then do
+      -- pretty print with ~/
+      putStrLn $ srpm ++ " is up to date"
+      return srpm
+      else buildSrpm (distopt ++ srpmdiropt)
+  where
+    buildSrpm opts = do
+      srpm <- last . words <$> cmd "rpmbuild" (opts ++ ["-bs", spec])
+      putStrLn $ "Created " ++ takeFileName srpm
+      return srpm
 
 #if (defined(MIN_VERSION_simple_cmd) && MIN_VERSION_simple_cmd(0,1,4))
 #else

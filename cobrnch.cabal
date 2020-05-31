@@ -38,6 +38,7 @@ executable cobrnch
                      , config-ini
                      , copr
                      , directory
+                     , extra
                      , fedora-dists
                      , filepath
                      , microlens
