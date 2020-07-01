@@ -277,12 +277,17 @@ generateSrpm spec = do
         error "empty source field!"
       else (takeFileName . last . words) field'
 
-#if (defined(MIN_VERSION_simple_cmd) && MIN_VERSION_simple_cmd(0,1,4))
-#else
+#if !MIN_VERSION_simple_cmd(0,1,4)
 error' :: String -> a
-#if (defined(MIN_VERSION_base) && MIN_VERSION_base(4,9,0))
+#if MIN_VERSION_base(4,9,0)
 error' = errorWithoutStackTrace
 #else
 error' = error
 #endif
+#endif
+
+#if !MIN_VERSION_filepath(1,4,2)
+isExtensionOf :: String -> FilePath -> Bool
+isExtensionOf ext@('.':_) = isSuffixOf ext . takeExtensions
+isExtensionOf ext         = isSuffixOf ('.':ext) . takeExtensions
 #endif
