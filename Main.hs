@@ -246,6 +246,10 @@ coprBuild dryrun buildroots project srpm = do
 generateSrpm :: FilePath -> IO FilePath
 generateSrpm spec = do
   let distopt = ["--undefine", "dist"]
+  sources <- map sourceFieldFile <$> cmdLines "spectool" ["-S", spec]
+  forM_ sources $ \ src ->
+    unlessM (doesFileExist src) $
+    cmd_ "spectool" ["-g", "-S", "-C", ".", spec]
   srpmfile <- cmd "rpmspec" $ ["-q", "--srpm"] ++ distopt ++ ["--qf", "%{name}-%{version}-%{release}.src.rpm", spec]
   let srpm = srpmfile
       srpmdiropt = ["--define", "_srcrpmdir ."]
@@ -265,6 +269,13 @@ generateSrpm spec = do
       srpm <- last . words <$> cmd "rpmbuild" (opts ++ ["-bs", spec])
       putStrLn $ "Created " ++ takeFileName srpm
       return srpm
+
+    sourceFieldFile :: String -> FilePath
+    sourceFieldFile field' =
+      if null field' then
+        -- should be impossible
+        error "empty source field!"
+      else (takeFileName . last . words) field'
 
 #if (defined(MIN_VERSION_simple_cmd) && MIN_VERSION_simple_cmd(0,1,4))
 #else
