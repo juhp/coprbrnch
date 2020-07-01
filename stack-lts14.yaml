@@ -1,7 +1,8 @@
-resolver: lts-15.16
+resolver: lts-14.27
 
 extra-deps:
   - git: https://github.com/juhp/fedora-dists.git
     commit: 1cc67927edd3b721c765a73fe6980608970e13e8
+  - simple-cmd-args-0.1.6
   - git: https://github.com/juhp/copr-hs.git
     commit: fedcc2835da8ddafe9ad3839f0c5c57a59bace12
