@@ -129,7 +129,8 @@ buildSrcCmd dryrun buildBy brs archs project src = do
   if null buildroots
     then error' "No chroots chosen"
     else do
-    srpm <- if "spec" `isExtensionOf` src
+    -- FIXME hack to avoid generating srpm for dryrun
+    srpm <- if "spec" `isExtensionOf` src && not dryrun
             then generateSrpm src
             else return src
     case buildBy of
