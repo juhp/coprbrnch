@@ -49,23 +49,23 @@ dispatchCmd _ activeBranches =
   -- FIXME package version
   simpleCmdArgs Nothing "Fedora package branch building tool"
     "This tool helps with updating and building package branches" $
-    subcommands
-    [
---      Subcommand "create" "create copr" $
---      cloneCmd <$> optional branchOpt <*> (strArg "COPRNAME")
---    , Subcommand "switch" "Switch branch" $
---      switchCmd <$> (anyBranchOpt <|> anyBranchArg) <*> many (pkgArg "PACKAGE...")
-      Subcommand "buildsrc" "Build from spec/srpm" $
+--    subcommands $
+--    [
+-- --      Subcommand "create" "create copr" $
+-- --      cloneCmd <$> optional branchOpt <*> (strArg "COPRNAME")
+-- --    , Subcommand "switch" "Switch branch" $
+-- --      switchCmd <$> (anyBranchOpt <|> anyBranchArg) <*> many (pkgArg "PACKAGE...")
+--      Subcommand "buildsrc" "Build from spec/srpm" $
       buildSrcCmd <$> dryrun <*> buildByOpt <*> many branchOpt <*> archOpts <*> strArg "PROJECT" <*> strArg "SRPM/SPEC"
---    , Subcommand "status" "Status package/branch status" $
---      statusCmd <$> switchWith 'r' "reviews" "Status of reviewed packages" <*> branchesPackages
---    , Subcommand "merge" "Merge from newer branch" $
---      mergeCmd <$> branchesPackages
---      Subcommand "build" "Build package(s)" $
---      buildCmd <$> mergeOpt <*> targetOpt <*> branchesPackages,
---      Subcommand "pull" "Git pull packages" $
---      pullPkgs <$> some (pkgArg "PACKAGE...")
-    ]
+-- --    , Subcommand "status" "Status package/branch status" $
+-- --      statusCmd <$> switchWith 'r' "reviews" "Status of reviewed packages" <*> branchesPackages
+-- --    , Subcommand "merge" "Merge from newer branch" $
+-- --      mergeCmd <$> branchesPackages
+-- --      Subcommand "build" "Build package(s)" $
+-- --      buildCmd <$> mergeOpt <*> targetOpt <*> branchesPackages,
+-- --      Subcommand "pull" "Git pull packages" $
+-- --      pullPkgs <$> some (pkgArg "PACKAGE...")
+--    ]
   where
     dryrun = switchWith 'n' "dry-run" "Just print commands that would be executed"
 
