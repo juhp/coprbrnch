@@ -139,7 +139,7 @@ buildSrcCmd dryrun buildBy brs archs project src = do
                 ValidateByRelease -> do
                   let initialChroots =
                         let primaryArch = releaseArch $ head buildroots
-                        in map singleton $ filter (isArch primaryArch) buildroots
+                        in map pure $ filter (isArch primaryArch) buildroots
                   forM_ initialChroots $ \chrs ->
                     coprBuild dryrun chrs project srpm
                   let remainingChroots = buildroots \\ concat initialChroots
@@ -148,7 +148,7 @@ buildSrcCmd dryrun buildBy brs archs project src = do
                 ValidateByArch -> do
                   let initialChroots =
                         let newestRelease = removeArch $ head buildroots
-                        in map singleton $ filter (newestRelease `isPrefixOf`) buildroots
+                        in map pure $ filter (newestRelease `isPrefixOf`) buildroots
                   forM_ initialChroots $ \chrs ->
                     coprBuild dryrun chrs project srpm
                   let remainingChroots = buildroots \\ concat initialChroots
@@ -175,9 +175,6 @@ buildSrcCmd dryrun buildBy brs archs project src = do
     -- from extra
     takeWhileEnd :: (a -> Bool) -> [a] -> [a]
     takeWhileEnd f = reverse . takeWhile f . reverse
-
-    singleton :: a -> [a]
-    singleton x = [x]
 
 branchRelease :: Branch -> String
 branchRelease Master = "fedora-rawhide"
