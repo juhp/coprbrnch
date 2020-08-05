@@ -134,33 +134,30 @@ buildSrcCmd dryrun buildBy brs archs project src = do
             then generateSrpm src
             else return src
     case buildBy of
-                SingleBuild -> coprBuild dryrun buildroots project srpm
+                SingleBuild -> coprBuild dryrun project srpm buildroots
                 -- FIXME or default to secondary parallel to previous primary
                 ValidateByRelease -> do
                   let initialChroots =
                         let primaryArch = releaseArch $ head buildroots
                         in map pure $ filter (isArch primaryArch) buildroots
-                  forM_ initialChroots $ \chrs ->
-                    coprBuild dryrun chrs project srpm
+                  mapM_ (coprBuild dryrun project srpm) initialChroots
                   let remainingChroots = buildroots \\ concat initialChroots
                   unless (null remainingChroots) $
-                    coprBuild dryrun remainingChroots project srpm
+                    coprBuild dryrun project srpm remainingChroots
                 ValidateByArch -> do
                   let initialChroots =
                         let newestRelease = removeArch $ head buildroots
                         in map pure $ filter (newestRelease `isPrefixOf`) buildroots
-                  forM_ initialChroots $ \chrs ->
-                    coprBuild dryrun chrs project srpm
+                  mapM_ (coprBuild dryrun project srpm) initialChroots
                   let remainingChroots = buildroots \\ concat initialChroots
                   unless (null remainingChroots) $
-                    coprBuild dryrun remainingChroots project srpm
+                    coprBuild dryrun project srpm remainingChroots
                 BuildByRelease -> do
                   let initialChroots = groupBy sameRelease buildroots
-                  forM_ initialChroots $ \chrs ->
-                    coprBuild dryrun chrs project srpm
+                  mapM_ (coprBuild dryrun project srpm) initialChroots
                   let remainingChroots = buildroots \\ concat initialChroots
                   unless (null remainingChroots) $
-                    coprBuild dryrun remainingChroots project srpm
+                    coprBuild dryrun project srpm remainingChroots
   where
     removeArch relarch = init $ dropWhileEnd (/= '-') relarch
 
@@ -215,15 +212,15 @@ readIniConfig inifile iniparser record = do
     let config = parseIniFile ini iniparser
     return $ either error' record config
 
-coprBuild :: Bool -> [String] -> String -> FilePath -> IO ()
-coprBuild _ [] _ _ = error' "No chroots chosen"
-coprBuild dryrun buildroots project srpm = do
+coprBuild :: Bool -> String -> FilePath -> [String] -> IO ()
+coprBuild _ _ _ [] = error' "No chroots chosen"
+coprBuild dryrun project srpm buildroots = do
   let chrootargs = mconcat [["-r", bldrt] | bldrt <- buildroots]
       buildargs = ["build", "--nowait"] ++ chrootargs ++ [project, srpm]
   putStrLn ""
   cmdN "copr" buildargs
   unless dryrun $ do
-    output <- cmd "copr" $ buildargs
+    output <- cmd "copr" buildargs
     putStrLn output
     let bid = last $ words $ last $ lines output
     cmd_ "copr" ["watch-build", bid]
