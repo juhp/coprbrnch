@@ -140,25 +140,24 @@ buildSrcCmd dryrun buildBy brs archs project src = do
                   let initialChroots =
                         let primaryArch = releaseArch $ head buildroots
                         in map pure $ filter (isArch primaryArch) buildroots
-                  mapM_ (coprBuild dryrun project srpm) initialChroots
-                  let remainingChroots = buildroots \\ concat initialChroots
-                  unless (null remainingChroots) $
-                    coprBuild dryrun project srpm remainingChroots
+                      remainingChroots = buildroots \\ concat initialChroots
+                  staggerBuilds srpm initialChroots remainingChroots
                 ValidateByArch -> do
                   let initialChroots =
                         let newestRelease = removeArch $ head buildroots
                         in map pure $ filter (newestRelease `isPrefixOf`) buildroots
-                  mapM_ (coprBuild dryrun project srpm) initialChroots
-                  let remainingChroots = buildroots \\ concat initialChroots
-                  unless (null remainingChroots) $
-                    coprBuild dryrun project srpm remainingChroots
+                      remainingChroots = buildroots \\ concat initialChroots
+                  staggerBuilds srpm initialChroots remainingChroots
                 BuildByRelease -> do
                   let initialChroots = groupBy sameRelease buildroots
-                  mapM_ (coprBuild dryrun project srpm) initialChroots
-                  let remainingChroots = buildroots \\ concat initialChroots
-                  unless (null remainingChroots) $
-                    coprBuild dryrun project srpm remainingChroots
+                      remainingChroots = buildroots \\ concat initialChroots
+                  staggerBuilds srpm initialChroots remainingChroots
   where
+    staggerBuilds srpm initialChroots remainingChroots = do
+      mapM_ (coprBuild dryrun project srpm) initialChroots
+      unless (null remainingChroots) $
+        coprBuild dryrun project srpm remainingChroots
+
     removeArch relarch = init $ dropWhileEnd (/= '-') relarch
 
     releaseArch relarch = takeWhileEnd (/= '-') relarch
