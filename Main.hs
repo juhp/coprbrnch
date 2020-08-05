@@ -251,9 +251,9 @@ generateSrpm spec = do
     cmd_ "spectool" ["-g", "-S", "-C", ".", spec]
   srpmfile <- cmd "rpmspec" $ ["-q", "--srpm"] ++ distopt ++ ["--qf", "%{name}-%{version}-%{release}.src.rpm", spec]
   let srpm = srpmfile
-      srpmdiropt = ["--define", "_srcrpmdir ."]
+      rpmsrcopts = ["--define", "_srcrpmdir ."] ++ ["--define", "_sourcedir ."]
   ifM (notM $ doesFileExist srpm)
-    (buildSrpm (distopt ++ srpmdiropt)) $
+    (buildSrpm (distopt ++ rpmsrcopts)) $
     do
     specTime <- getModificationTime spec
     srpmTime <- getModificationTime srpm
@@ -262,7 +262,7 @@ generateSrpm spec = do
       -- pretty print with ~/
       putStrLn $ srpm ++ " is up to date"
       return srpm
-      else buildSrpm (distopt ++ srpmdiropt)
+      else buildSrpm (distopt ++ rpmsrcopts)
   where
     buildSrpm opts = do
       srpm <- last . words <$> cmd "rpmbuild" (opts ++ ["-bs", spec])
